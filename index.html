@@ -81,22 +81,22 @@
         </div>
       </div>
 
-      <!-- กราฟบิตคอยน์สะสม -->
+      <!-- กราฟบิตคอยน์สะสม (คำนวณจากประวัติรายวัน + แสดงวันที่) -->
       <div class="card">
         <div class="card__header">
           <h3 class="heading">กราฟบิตคอยน์สะสม</h3>
         </div>
-        <div class="chart">
+        <div class="chart" id="accChartWrap">
           <svg id="accChart" preserveAspectRatio="none">
-            <!-- เส้น/พื้นที่กราฟ -->
+            <g id="accGrid"></g>
             <path id="accArea" class="chart-area" d=""></path>
             <path id="accPath" class="chart-line" d=""></path>
-            <!-- เส้นแกน / เส้นตาราง -->
-            <g id="accGrid"></g>
-            <!-- ป้ายแกน -->
             <g id="accXTicks"></g>
             <g id="accYTicks"></g>
+            <line id="accHoverLine" class="chart-hoverline" x1="0" x2="0" y1="0" y2="0" visibility="hidden"></line>
+            <circle id="accDot" class="chart-dot" r="4" cx="0" cy="0" visibility="hidden"></circle>
           </svg>
+          <div id="accTooltip" class="tooltip" hidden></div>
           <p id="accEmpty" class="muted" style="margin-top:8px;">ยังไม่พบข้อมูลกราฟ</p>
         </div>
       </div>
@@ -130,70 +130,4 @@
           </div>
         </div>
 
-        <div class="grid grid--2">
-          <label class="field">
-            <span>จำนวนเงิน (Fiat)</span>
-            <input id="fiatInput" inputmode="decimal" placeholder="0" />
-          </label>
-          <label class="field">
-            <span>Satoshi</span>
-            <input id="satsInput" inputmode="numeric" placeholder="0" />
-          </label>
-        </div>
-        <p class="muted" id="convNote">* อัปเดตราคาอัตโนมัติทุก 45 วินาที</p>
-      </div>
-    </section>
-  </main>
-
-  <!-- Modal เพิ่มรายการ -->
-  <div id="modal" class="modal" hidden>
-    <div class="modal__dialog">
-      <div class="modal__header">
-        <h3 class="heading">เพิ่มรายการซื้อ/ขาย</h3>
-        <button id="closeModal" class="btn btn--ghost">ปิด</button>
-      </div>
-      <div class="modal__body">
-        <div class="grid grid--2">
-          <label class="field">
-            <span>ประเภท</span>
-            <select id="txType">
-              <option value="buy">ซื้อ</option>
-              <option value="sell">ขาย</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>หน่วยจำนวน</span>
-            <select id="txUnit">
-              <option>BTC</option>
-              <option>Satoshi</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>จำนวนเงิน (Fiat)</span>
-            <input id="txFiat" inputmode="decimal" placeholder="เช่น 1000" />
-          </label>
-          <label class="field">
-            <span>ราคาบิตคอยน์</span>
-            <input id="txPrice" inputmode="decimal" placeholder="เช่น 3500000" />
-          </label>
-          <label class="field">
-            <span id="amountLabel">จำนวนที่ได้</span>
-            <input id="txAmount" inputmode="decimal" placeholder="เช่น 0.001 หรือ 100000" />
-          </label>
-        </div>
-      </div>
-      <div class="modal__footer">
-        <button id="saveTx" class="btn btn--primary">บันทึกรายการ</button>
-      </div>
-    </div>
-  </div>
-
-  <footer class="footer">
-    <div class="container">
-      <small class="muted">PWA ตัวอย่างสำหรับออม Bitcoin · อัปเดตราคาอัตโนมัติ · ทำงานออฟไลน์ได้บางส่วน</small>
-    </div>
-  </footer>
-
-  <script src="app.js" defer></script>
-</body>
-</html>
+        <div class="grid grid
