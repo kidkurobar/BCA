@@ -9,9 +9,7 @@ const state = {
 /* ====== Utils ====== */
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
-
-const format = (v, max = 2) =>
-  new Intl.NumberFormat("th-TH", { maximumFractionDigits: max }).format(v ?? 0);
+const format = (v, max = 2) => new Intl.NumberFormat("th-TH", { maximumFractionDigits: max }).format(v ?? 0);
 
 const saveLS = () => {
   localStorage.setItem("bca_settings", JSON.stringify(state.settings));
@@ -79,16 +77,62 @@ function computeStats() {
   return { totalSats, totalBTC, totalFiat, avgCost, currentValue, pnl, pnlPct };
 }
 
-/* ====== กราฟบิตคอยน์สะสม (SVG ไม่พึ่งไลบรารี) ====== */
-function getCumulativeSeries() {
-  const arr = state.txs.slice().sort((a,b) => a.createdAt - b.createdAt);
-  let sum = 0;
-  return arr.map(t => {
-    sum += (t.type === "buy" ? t.sats : -t.sats);
-    return { t: t.createdAt, btc: sum / 1e8 };
+/* ====== สร้างซีรีส์สะสม “รายวัน” จากประวัติ ======
+   - รวมธุรกรรมในวันเดียวกันเข้าด้วยกัน
+   - คำนวณค่าสะสม (สกุล BTC) */
+function startOfDay(ts) {
+  const d = new Date(ts);
+  d.setHours(0,0,0,0);
+  return +d;
+}
+function getCumulativeSeriesDaily() {
+  if (state.txs.length === 0) return [];
+  // รวม delta ต่อวัน
+  const map = new Map(); // key: day(ms at 00:00) -> deltaSats
+  state.txs.forEach(t => {
+    const day = startOfDay(t.createdAt);
+    const delta = (t.type === "buy" ? t.sats : -t.sats);
+    map.set(day, (map.get(day) || 0) + delta);
+  });
+  // จัดเรียงตามวันและทำ cumulative
+  const days = Array.from(map.keys()).sort((a,b) => a - b);
+  let sumSats = 0;
+  return days.map(day => {
+    sumSats += map.get(day);
+    return { t: day, btc: sumSats / 1e8 };
   });
 }
 
+/* ====== สร้าง ticks วันที่สวย ๆ ตามช่วงเวลา ====== */
+function generateDateTicks(minX, maxX, desired = 6) {
+  const oneDay = 86400000;
+  let spanDays = Math.max(1, Math.round((maxX - minX) / oneDay));
+  if (spanDays < desired) {
+    // ถ้าช่วงสั้นมาก เติมให้ครบ desired โดยก้าวเป็น 1 วัน
+    const ticks = [];
+    for (let i = 0; i < desired; i++) {
+      ticks.push(minX + i * oneDay);
+    }
+    return ticks.filter(t => t <= maxX);
+  }
+  const stepDays = Math.max(1, Math.round(spanDays / (desired - 1)));
+  const ticks = [];
+  let cursor = startOfDay(minX);
+  while (cursor <= maxX) {
+    ticks.push(cursor);
+    cursor += stepDays * oneDay;
+  }
+  if (ticks[ticks.length - 1] !== startOfDay(maxX)) ticks.push(startOfDay(maxX));
+  return ticks.slice(0, desired + 1);
+}
+function formatDateTick(ts, spanDays) {
+  const d = new Date(ts);
+  if (spanDays <= 31) return d.toLocaleDateString("th-TH", { day:"2-digit", month:"short" });
+  if (spanDays <= 366) return d.toLocaleDateString("th-TH", { day:"2-digit", month:"short" });
+  return d.toLocaleDateString("th-TH", { month:"short", year:"numeric" });
+}
+
+/* ====== กราฟสะสม: วาด + ใส่วันที่ + ทูลทิป ====== */
 function renderAccumChart() {
   const svg = $("#accChart");
   const path = $("#accPath");
@@ -96,19 +140,25 @@ function renderAccumChart() {
   const xTicks = $("#accXTicks");
   const yTicks = $("#accYTicks");
   const grid = $("#accGrid");
+  const dot = $("#accDot");
+  const hoverLine = $("#accHoverLine");
+  const tip = $("#accTooltip");
   const empty = $("#accEmpty");
-  if (!svg || !path || !area) return;
+  if (!svg) return;
 
   const w = svg.clientWidth || svg.parentElement.clientWidth || 680;
   const h = 260;
-  const pad = { l: 40, r: 12, t: 12, b: 28 };
+  const pad = { l: 48, r: 12, t: 12, b: 30 };
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
 
-  const data = getCumulativeSeries();
+  const data = getCumulativeSeriesDaily();
   xTicks.innerHTML = ""; yTicks.innerHTML = ""; grid.innerHTML = "";
 
   if (!data.length) {
     path.setAttribute("d", ""); area.setAttribute("d", "");
+    hoverLine.setAttribute("visibility","hidden");
+    dot.setAttribute("visibility","hidden");
+    tip.hidden = true;
     empty.hidden = false;
     return;
   }
@@ -117,21 +167,18 @@ function renderAccumChart() {
   const xs = data.map(d => d.t);
   const ys = data.map(d => d.btc);
   let minX = Math.min(...xs), maxX = Math.max(...xs);
-  if (minX === maxX) { maxX = minX + 1; } // กันหารศูนย์
+  if (minX === maxX) { maxX = minX + 86400000; } // อย่างน้อย 1 วัน
   let minY = Math.min(...ys), maxY = Math.max(...ys);
-  if (minY === maxY) { // กรณีเส้นราบ
-    minY = Math.min(0, minY - 0.0000001);
-    maxY = maxY + 0.0000001;
-  }
+  if (minY === maxY) { minY = Math.min(0,minY - 0.0000001); maxY = maxY + 0.0000001; }
 
-  const xScale = x => pad.l + ( (x - minX) / (maxX - minX) ) * (w - pad.l - pad.r);
-  const yScale = y => (h - pad.b) - ( (y - minY) / (maxY - minY) ) * (h - pad.t - pad.b);
+  const xScale = x => pad.l + ((x - minX) / (maxX - minX)) * (w - pad.l - pad.r);
+  const yScale = y => (h - pad.b) - ((y - minY) / (maxY - minY)) * (h - pad.t - pad.b);
+  const xInvert = px => ((px - pad.l) / (w - pad.l - pad.r)) * (maxX - minX) + minX;
 
-  // สร้าง path เส้น
+  // เส้นกราฟ
   let d = "";
   data.forEach((pt,i) => {
-    const X = xScale(pt.t);
-    const Y = yScale(pt.btc);
+    const X = xScale(pt.t), Y = yScale(pt.btc);
     d += (i===0 ? `M ${X} ${Y}` : ` L ${X} ${Y}`);
   });
   path.setAttribute("d", d);
@@ -143,7 +190,7 @@ function renderAccumChart() {
   const areaD = `${d} L ${lastX} ${baseY} L ${firstX} ${baseY} Z`;
   area.setAttribute("d", areaD);
 
-  // เส้นตารางแนวนอน + y ticks (4 ช่อง)
+  // เส้นตารางแนวนอน + Y ticks
   const ySteps = 4;
   for (let i=0; i<=ySteps; i++){
     const yy = minY + (i*(maxY-minY)/ySteps);
@@ -162,18 +209,77 @@ function renderAccumChart() {
     yTicks.appendChild(t);
   }
 
-  // x ticks (วันที่ 3 จุด: ซ้าย/กลาง/ขวา)
-  const xVals = [minX, (minX+maxX)/2, maxX];
-  xVals.forEach(val => {
-    const X = xScale(val);
-    const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-    t.setAttribute("x", X);
-    t.setAttribute("y", h - 6);
-    t.setAttribute("text-anchor","middle");
-    t.setAttribute("class","chart-tick");
-    t.textContent = new Date(val).toLocaleDateString("th-TH", { month:"short", day:"numeric" });
-    xTicks.appendChild(t);
+  // X ticks (วันที่หลายจุด)
+  const spanDays = Math.round((maxX - minX) / 86400000);
+  const tickDates = generateDateTicks(minX, maxX, 6);
+  tickDates.forEach(ts => {
+    const X = xScale(ts);
+    // เส้นตารางแนวตั้ง
+    const v = document.createElementNS("http://www.w3.org/2000/svg","path");
+    v.setAttribute("d", `M ${X} ${pad.t} V ${h - pad.b}`);
+    v.setAttribute("class","chart-grid");
+    grid.appendChild(v);
+    // ป้ายวันที่
+    const xt = document.createElementNS("http://www.w3.org/2000/svg","text");
+    xt.setAttribute("x", X);
+    xt.setAttribute("y", h - 8);
+    xt.setAttribute("text-anchor","middle");
+    xt.setAttribute("class","chart-tick");
+    xt.textContent = formatDateTick(ts, spanDays);
+    xTicks.appendChild(xt);
   });
+
+  // ----- Tooltip / Hover -----
+  function nearestIndex(px) {
+    const targetT = xInvert(px);
+    // binary search
+    let lo = 0, hi = data.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (data[mid].t < targetT) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0 && Math.abs(data[lo].t - targetT) > Math.abs(data[lo-1].t - targetT)) lo = lo - 1;
+    return lo;
+  }
+  function showAt(i) {
+    const pt = data[i];
+    const X = xScale(pt.t), Y = yScale(pt.btc);
+    dot.setAttribute("cx", X); dot.setAttribute("cy", Y); dot.setAttribute("visibility","visible");
+    hoverLine.setAttribute("x1", X); hoverLine.setAttribute("x2", X);
+    hoverLine.setAttribute("y1", pad.t); hoverLine.setAttribute("y2", h - pad.b);
+    hoverLine.setAttribute("visibility","visible");
+
+    const elWrap = $("#accChartWrap");
+    const rect = svg.getBoundingClientRect();
+    const wrapRect = elWrap.getBoundingClientRect();
+    tip.hidden = false;
+    tip.innerHTML = `<strong>${format(pt.btc,8)} BTC</strong><br>${new Date(pt.t).toLocaleDateString("th-TH",{ day:"2-digit", month:"short", year:"numeric" })}`;
+    const tipX = (rect.left - wrapRect.left) + X;
+    const tipY = (rect.top - wrapRect.top) + Y;
+    tip.style.left = `${tipX}px`;
+    tip.style.top = `${tipY}px`;
+  }
+  function hideTip() {
+    dot.setAttribute("visibility","hidden");
+    hoverLine.setAttribute("visibility","hidden");
+    tip.hidden = true;
+  }
+
+  // ผูกอีเวนต์ (เมาส์/ทัช)
+  svg.onmousemove = (e) => {
+    const px = e.offsetX ?? (e.clientX - svg.getBoundingClientRect().left);
+    const i = nearestIndex(px);
+    showAt(i);
+  };
+  svg.ontouchstart = svg.ontouchmove = (e) => {
+    const touch = e.touches[0];
+    const rect = svg.getBoundingClientRect();
+    const px = touch.clientX - rect.left;
+    const i = nearestIndex(px);
+    showAt(i);
+  };
+  svg.onmouseleave = hideTip;
 }
 
 /* ====== Render Portfolio & List ====== */
@@ -327,7 +433,6 @@ function setActiveTab() {
   $$(".tab").forEach(a => a.classList.toggle("active", a.getAttribute("href") === hash));
   $("#view-portfolio").hidden = !(hash === "#/portfolio");
   $("#view-converter").hidden = !(hash === "#/converter");
-  // เวลาเปลี่ยนแท็บ รีเลย์เอาต์กราฟใหม่ (กรณีความกว้างเปลี่ยน)
   if (hash === "#/portfolio") setTimeout(renderAccumChart, 50);
 }
 window.addEventListener("hashchange", setActiveTab);
