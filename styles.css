@@ -20,21 +20,24 @@ body{
   color: var(--text);
 }
 
+/* ป้องกัน element ที่มี hidden ค้างบังคลิก */
+[hidden]{display:none !important}
+
 .container{max-width:980px;margin:0 auto;padding:0 16px}
 
 /* App bar & tabs */
-.appbar{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:10}
+.appbar{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:20}
 .appbar__inner{display:flex;align-items:center;justify-content:space-between;height:56px}
 .brand{font-size:20px;margin:0;color:var(--text);font-weight:700}
 
-.tabs{position:sticky;top:56px;background:var(--bg);border-bottom:1px solid var(--border);z-index:9}
+.tabs{position:sticky;top:56px;background:var(--bg);border-bottom:1px solid var(--border);z-index:19}
 .tabs__inner{display:flex;gap:16px}
-.tab{display:inline-block;padding:12px 8px;color:var(--muted);text-decoration:none}
+.tab{display:inline-block;padding:12px 8px;color:var(--muted);text-decoration:none;position:relative;z-index:0}
 .tab.active{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:700}
 
 .view{padding:20px 0}
 
-/* Cards */
+/* Cards (คลิกได้แน่: สร้าง stacking context ของตัวเอง) */
 .card{
   background:var(--card);
   border:1px solid var(--border);
@@ -42,6 +45,8 @@ body{
   padding:16px;
   box-shadow:0 4px 16px rgba(0,0,0,.04);
   margin-bottom:16px;
+  position:relative;
+  z-index:0;
 }
 .card__header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 
@@ -60,4 +65,42 @@ body{
 @media (max-width:520px){.stats{grid-template-columns:1fr}}
 
 .stat{padding:12px;border:1px solid var(--border);border-radius:12px;background:#fafafa}
-.stat
+.stat__label{font-size:12px;color:var(--muted)}
+.stat__value{font-size:20px;margin-top:4px;color:var(--text)}
+
+/* Form */
+.field{display:flex;flex-direction:column;gap:6px;min-width:160px;position:relative;z-index:1}
+.field input,.field select{
+  background:#ffffff;color:var(--text);border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;outline:none
+}
+.field input:focus,.field select:focus{border-color:#3b82f6}
+
+/* Buttons */
+.btn{border:1px solid var(--border);background:#f3f4f6;color:var(--text);border-radius:10px;padding:10px 14px;cursor:pointer;position:relative;z-index:1}
+.btn:hover{filter:brightness(1.02)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.btn--primary{background:var(--primary);border-color:#16a34a;color:white}
+.btn--ghost{background:transparent}
+
+/* List */
+.list{display:flex;flex-direction:column;gap:10px}
+.tx{
+  display:flex;gap:12px;align-items:flex-start;justify-content:space-between;
+  border:1px solid var(--border);background:#fafafa;border-radius:12px;padding:12px
+}
+.tx__left{display:flex;gap:10px}
+.tx__icon{font-size:20px}
+.tx__title{margin:0}
+.tx__meta{color:var(--muted);font-size:13px}
+
+.muted{color:var(--muted)}
+
+.footer{padding:32px 0;border-top:1px solid var(--border);margin-top:24px}
+
+/* Modal */
+.modal{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.25);z-index:30}
+.modal__dialog{width:min(700px,96vw);background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.modal__header,.modal__footer{padding:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal__footer{border-top:1px solid var(--border);border-bottom:none}
+.modal__
